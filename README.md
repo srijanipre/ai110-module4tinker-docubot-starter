@@ -80,3 +80,6 @@ You will primarily work in:
 - Python 3.9+
 - A Gemini API key for LLM features (only needed for modes 1 and 3)
 - No database, no server setup, no external services besides LLM calls
+
+
+This assignment was abot understanding how retrieval-augmented generation works and why just using an LLM on its own isn’t always reliable. The biggest idea was that models can sound really confident even when they’re not actually grounded in the project’s documentation, which is why retrieval is needed to give them real context. I think students would struggle most with designing the retrieval system itself, especially figuring out how to score relevance and why certain results show up over others. Another confusing part is realizing that messy retrieval output is actually correct, even if it doesn’t look nice at first. AI was heplful for explaining code and helping plan out the retrieval logic, especially when breaking down what each function should do. At the same time, it could be misleading by suggesting overly complicated solutions or making things seem correct when they weren’t fully grounded in the docs. One way I would guide a student without giving them the answer is by asking them to compare outputs across the three modes and point out where the information is actually coming from, so they can figure out the differences on their own.
