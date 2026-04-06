@@ -10,6 +10,16 @@ Core DocuBot class responsible for:
 import os
 import glob
 
+STOPWORDS = {
+    "a", "an", "the", "is", "are", "was", "were", "be", "been", "being",
+    "have", "has", "had", "do", "does", "did", "will", "would", "could",
+    "should", "may", "might", "shall", "can", "of", "in", "on", "at", "to",
+    "for", "with", "by", "from", "into", "about", "as", "or", "and", "but",
+    "not", "no", "so", "if", "its", "it", "this", "that", "these", "those",
+    "there", "their", "they", "any", "all", "how", "what", "which", "where",
+    "when", "who", "i", "my", "your", "our", "me", "we", "us",
+}
+
 class DocuBot:
     def __init__(self, docs_folder="docs", llm_client=None):
         """
@@ -32,7 +42,8 @@ class DocuBot:
     def load_documents(self):
         """
         Loads all .md and .txt files inside docs_folder.
-        Returns a list of tuples: (filename, text)
+        Returns a list of tuples: (filename, chunk) where each chunk is one
+        paragraph (split on blank lines). Empty paragraphs are dropped.
         """
         docs = []
         pattern = os.path.join(self.docs_folder, "*.*")
@@ -41,7 +52,10 @@ class DocuBot:
                 with open(path, "r", encoding="utf8") as f:
                     text = f.read()
                 filename = os.path.basename(path)
-                docs.append((filename, text))
+                for chunk in text.split("\n\n"):
+                    chunk = chunk.strip()
+                    if chunk:
+                        docs.append((filename, chunk))
         return docs
 
     # -----------------------------------------------------------
@@ -64,7 +78,14 @@ class DocuBot:
         ignore punctuation if needed.
         """
         index = {}
-        # TODO: implement simple indexing
+        for filename, text in documents:
+            words = text.lower().split()
+            seen = set()
+            for word in words:
+                token = word.strip(".,!?;:\"'()")
+                if token and token not in seen:
+                    index.setdefault(token, []).append(filename)
+                    seen.add(token)
         return index
 
     # -----------------------------------------------------------
@@ -81,18 +102,43 @@ class DocuBot:
         - Count how many appear in the text
         - Return the count as the score
         """
-        # TODO: implement scoring
-        return 0
+        text_lower = text.lower()
+        query_tokens = [
+            w.strip(".,!?;:\"'()") for w in query.lower().split()
+        ]
+        content_tokens = [t for t in query_tokens if t and t not in STOPWORDS]
+        score = sum(1 for token in content_tokens if token in text_lower)
+        return score
 
-    def retrieve(self, query, top_k=3):
+    def retrieve(self, query, top_k=3, min_score=2):
         """
-        TODO (Phase 1):
-        Use the index and scoring function to select top_k relevant document snippets.
+        Use the index and scoring function to select top_k relevant chunks.
 
-        Return a list of (filename, text) sorted by score descending.
+        min_score: minimum number of query tokens that must appear in a chunk
+        for it to be considered useful evidence. Chunks below this threshold
+        are discarded before ranking. Returns [] if nothing clears the bar,
+        which causes the answer methods to issue a refusal.
+
+        Return a list of (filename, chunk) sorted by score descending.
         """
-        results = []
-        # TODO: implement retrieval logic
+        # Use the index to find candidate filenames containing query tokens
+        query_tokens = [w.strip(".,!?;:\"'()") for w in query.lower().split()]
+        content_tokens = [t for t in query_tokens if t and t not in STOPWORDS]
+        candidates = set()
+        for token in content_tokens:
+            if token in self.index:
+                candidates.update(self.index[token])
+
+        # Score each candidate chunk; drop anything below min_score
+        scored = []
+        for filename, chunk in self.documents:
+            if filename in candidates:
+                score = self.score_document(query, chunk)
+                if score >= min_score:
+                    scored.append((score, filename, chunk))
+
+        scored.sort(key=lambda x: x[0], reverse=True)
+        results = [(filename, chunk) for _, filename, chunk in scored]
         return results[:top_k]
 
     # -----------------------------------------------------------
